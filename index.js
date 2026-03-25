@@ -46,3 +46,10 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`SuitPay relay running on port ${PORT}`);
 });
+
+// Diagnóstico em produção: IP público visto pelo relay
+app.get("/my-ip", async (req, res) => {
+  const r = await fetch("https://api.ipify.org?format=json");
+  const data = await r.json();
+  res.json(data);
+});
