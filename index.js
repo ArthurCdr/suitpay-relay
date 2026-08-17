@@ -38,7 +38,8 @@ app.use((req, res, next) => {
   const source =
     req.headers["origin"] ||
     req.headers["referer"] ||
-    req.headers["x-forwarded-host"];
+    req.headers["x-forwarded-host"] ||
+    req.headers["host"];
   const hostname = extractHostname(source);
 
   if (!isDomainAllowed(hostname)) {
