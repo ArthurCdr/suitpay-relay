@@ -36,7 +36,12 @@ function isDomainAllowed(hostname) {
 // Só Origin/Referer contam — host/x-forwarded-host são sempre o domínio do
 // próprio relay e permitiriam bypass se ele estivesse em ALLOWED_DOMAINS.
 // Chamadas servidor→servidor legítimas passam pelo RELAY_SECRET.
+// Endpoints de diagnóstico acessíveis direto pelo navegador, sem filtro
+const PUBLIC_PATHS = ["/health", "/my-ip"];
+
 app.use((req, res, next) => {
+  if (PUBLIC_PATHS.includes(req.path)) return next();
+
   if (ALLOWED_DOMAINS.length === 0) {
     console.warn("ALLOWED_DOMAINS vazio — filtro de domínio DESATIVADO");
     return next();
