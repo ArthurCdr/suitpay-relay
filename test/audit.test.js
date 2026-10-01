@@ -14,10 +14,13 @@ async function setup(t, upstream = async () => Response.json({ id: 'mock-transac
   const rows = new Map();
   let unavailable = false;
   const database = async (url, options) => {
-    assert.match(url, /info09_pix_relay_logs\?on_conflict=id$/);
+    assert.match(url, /info09_pix_requests\?on_conflict=session_id$/);
     if (unavailable) return new Response('', { status: 503 });
     const row = JSON.parse(options.body);
-    rows.set(row.id, row);
+    assert.equal(row.record_type, 'relay_request');
+    assert.equal(row.payout_status, null);
+    assert.equal(row.id, undefined);
+    rows.set(row.session_id, row);
     return new Response(null, { status: 204 });
   };
   const audit = createAudit({ directory, url: 'https://mock.supabase.co', key: 'sb_secret_test', fetchImpl: database, intervalMs: 20 });

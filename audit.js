@@ -51,10 +51,12 @@ function createAudit({ directory, url, key, fetchImpl = fetch, intervalMs = 5000
         const target = path.join(directory, file);
         const snapshot = fs.readFileSync(target, 'utf8');
         const row = JSON.parse(snapshot);
+        const { id, ...fields } = row;
+        const databaseRow = { ...fields, session_id: id, record_type: 'relay_request', payout_status: null };
         const headers = { apikey: key, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' };
         if (!key.startsWith('sb_secret_')) headers.Authorization = `Bearer ${key}`;
-        const response = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1/info09_pix_relay_logs?on_conflict=id`, {
-          method: 'POST', headers, body: snapshot, signal: AbortSignal.timeout(10000),
+        const response = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1/info09_pix_requests?on_conflict=session_id`, {
+          method: 'POST', headers, body: JSON.stringify(databaseRow), signal: AbortSignal.timeout(10000),
         });
         // Do not print database responses: they can contain request data.
         if (!response.ok) throw new Error(`Supabase HTTP ${response.status}`);

@@ -1,6 +1,6 @@
 # SuitPay relay
 
-Backend Node.js 20+ / Express que encaminha pagamentos Pix à SuitPay e registra todos os acessos HTTP em `public.info09_pix_relay_logs` no Supabase. A tabela de negócio existente `info09_pix_requests` não é alterada.
+Backend Node.js 20+ / Express que encaminha pagamentos Pix à SuitPay e registra todos os acessos HTTP em `public.info09_pix_requests` no Supabase. Cada acesso ocupa uma linha própria, identificada por `record_type = relay_request`; os registros de saque existentes permanecem com `record_type = payout`.
 
 ## Configuração
 
@@ -9,7 +9,7 @@ Backend Node.js 20+ / Express que encaminha pagamentos Pix à SuitPay e registra
 3. Configure `AUDIT_SPOOL_DIR` em um **volume persistente**, exclusivo por processo/réplica, com permissão de escrita. Sem volume persistente, registros pendentes podem ser perdidos ao recriar o container.
 4. Inicie com `node --env-file=.env index.js`. Em produção, com variáveis injetadas pelo provedor, use `npm start`.
 
-A migration versionada cria a tabela, índices e acesso restrito ao backend. Ela já foi aplicada ao projeto `uaqrztydzdfjrlefaald`. Para outro projeto, aplique o SQL em `supabase/migrations/` antes de iniciar. A autenticação MCP do Codex não fornece credenciais ao processo Node.js.
+As migrations versionadas adicionam os campos de auditoria à tabela existente, preservam a validação dos saques e transferem os logs da antiga tabela separada, que é removida. Elas já foram aplicadas ao projeto `uaqrztydzdfjrlefaald`. Para outro projeto, a tabela de negócio `info09_pix_requests` deve existir com seu schema original; aplique as migrations em `supabase/migrations/` na ordem antes de iniciar. A autenticação MCP do Codex não fornece credenciais ao processo Node.js.
 
 O serviço recusa iniciar sem as variáveis obrigatórias. Configure-as **antes de publicar esta versão**. Se a fila não puder registrar uma nova requisição em disco, o relay retorna 503 antes de executar a operação.
 
@@ -24,9 +24,11 @@ O serviço recusa iniciar sem as variáveis obrigatórias. Configure-as **antes 
 
 ## Auditoria e recuperação
 
+Linhas de auditoria têm `payout_status = NULL` e dados de Pix no JSON `request_body`/`response_body`, evitando que um acesso seja interpretado como saque pendente. Consultas de negócio devem filtrar `record_type = payout`; consultas de auditoria, `record_type = relay_request`. Filas em disco de versões anteriores também são enviadas à tabela consolidada.
+
 Cada requisição que chega ao Express ganha UUID próprio no cabeçalho `X-Request-Id`, inclusive bloqueios, OPTIONS, diagnósticos, rotas inexistentes, JSON inválido e corpos grandes demais. São gravados método, caminho, query sanitizada, IP do socket, origem, corpo JSON sanitizado, resposta JSON sanitizada, status HTTP, status da SuitPay, duração e código de erro.
 
-A fila salva um registro inicial em disco antes de processar, com gravação atômica e fsync. Na conclusão, atualiza o registro. Um worker envia ao Supabase por upsert no UUID; reenvios não duplicam registros nem executam pagamentos. Erros de sincronização são informados no stderr e mantêm os arquivos para a próxima tentativa (a cada 5 segundos). Monitore esses erros e o espaço em disco.
+A fila salva um registro inicial em disco antes de processar, com gravação atômica e fsync. Na conclusão, atualiza o registro. Um worker envia ao Supabase por upsert em `session_id` (UUID do acesso); reenvios não duplicam registros nem executam pagamentos. Erros de sincronização são informados no stderr e mantêm os arquivos para a próxima tentativa (a cada 5 segundos). Monitore esses erros e o espaço em disco.
 
 Estados: `received`, `success`, `blocked`, `error`, `aborted`, `interrupted`. `success` significa resposta HTTP bem-sucedida, **não confirmação de liquidação do Pix**. Após reinício, registros incompletos são marcados `interrupted`, pois o resultado da operação pode ser desconhecido. Desconexões registram `aborted`. Não há garantia de capturar tráfego bloqueado antes do Node.js, falha total de disco ou o resultado final após queda do processo.
 
