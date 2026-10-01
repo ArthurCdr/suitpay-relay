@@ -2,9 +2,13 @@
   "name": "suitpay-relay",
   "version": "1.0.0",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
